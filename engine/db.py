@@ -10,68 +10,50 @@ def connect():
     conn = sqlite3.connect(DB_PATH)
     conn.row_factory = sqlite3.Row
     
-    # 1. History data (append-only)
+    # 1. History
     conn.execute(
         """CREATE TABLE IF NOT EXISTS events (
-             id INTEGER PRIMARY KEY,
-             ts TEXT NOT NULL,           
-             kind TEXT NOT NULL,         
-             source TEXT NOT NULL DEFAULT 'ui',
-             recorded_at TEXT NOT NULL   
+             id INTEGER PRIMARY KEY, ts TEXT NOT NULL, kind TEXT NOT NULL,         
+             source TEXT NOT NULL DEFAULT 'ui', recorded_at TEXT NOT NULL   
            )"""
     )
     
-    # 2. State data (updated in place)
+    # 2. Goals (The Targets)
     conn.execute(
         """CREATE TABLE IF NOT EXISTS goals (
-             id INTEGER PRIMARY KEY,
-             title TEXT NOT NULL,
-             why TEXT,
-             deadline TEXT,
-             priority INTEGER DEFAULT 3,      -- 1 = most important
-             status TEXT DEFAULT 'active',    -- 'active', 'completed', 'dropped'
+             id INTEGER PRIMARY KEY, title TEXT NOT NULL, why TEXT,
+             deadline TEXT, priority INTEGER DEFAULT 3, status TEXT DEFAULT 'active',
              created_at TEXT NOT NULL
            )"""
     )
 
-    # 3. HABITS (The Engines/Rules)
+    # 3. Habits (The Engines)
     conn.execute(
         """CREATE TABLE IF NOT EXISTS habits (
-             id INTEGER PRIMARY KEY,
-             goal_id INTEGER,                 -- Which goal this serves (nullable)
-             title TEXT NOT NULL,
-             frequency TEXT NOT NULL,         -- e.g., 'daily', 'mon,wed,fri', 'weekends'
-             time_of_day TEXT,                -- 'morning', '14:30', or NULL for anytime
-             duration_mins INTEGER,
-             status TEXT DEFAULT 'active',    -- 'proposed', 'active', 'paused'
-             created_by TEXT DEFAULT 'user',  -- 'user' or 'ai'
-             created_at TEXT NOT NULL,
-             FOREIGN KEY(goal_id) REFERENCES goals(id)
+             id INTEGER PRIMARY KEY, goal_id INTEGER, title TEXT NOT NULL,
+             frequency TEXT NOT NULL, time_of_day TEXT, duration_mins INTEGER,
+             status TEXT DEFAULT 'active', created_by TEXT DEFAULT 'user',
+             created_at TEXT NOT NULL, FOREIGN KEY(goal_id) REFERENCES goals(id)
            )"""
     )
 
-    # 4. COMMITMENTS (The Stepping Stones)
+    # 4. Commitments (The Stepping Stones)
     conn.execute(
         """CREATE TABLE IF NOT EXISTS commitments (
-             id INTEGER PRIMARY KEY,
-             goal_id INTEGER,
-             habit_id INTEGER,                -- If a habit spawned this, link it here
-             title TEXT NOT NULL,
-             description TEXT,                -- Maps to Calendar "Notes/Description"
-             scheduled_date TEXT NOT NULL,    -- YYYY-MM-DD
-             scheduled_time TEXT,             -- HH:MM (if strict), NULL (if floating/anytime)
-             duration_mins INTEGER,           -- Maps to Calendar event duration
-             status TEXT DEFAULT 'proposed',  -- 'proposed', 'active', 'completed', 'dropped'
-             created_by TEXT DEFAULT 'user',  -- 'user', 'ai'
-             
-             -- Future-proofing for Calendars:
-             ext_source TEXT,                 -- e.g., 'gcal', 'outlook' (NULL if created in Hew)
-             ext_id TEXT,                     -- The unique ID from Google/Outlook
-             
-             created_at TEXT NOT NULL,
-             FOREIGN KEY(goal_id) REFERENCES goals(id),
-             FOREIGN KEY(habit_id) REFERENCES habits(id),
-             UNIQUE(ext_source, ext_id)       -- Prevents calendar duplicate bugs!
+             id INTEGER PRIMARY KEY, goal_id INTEGER, habit_id INTEGER,
+             title TEXT NOT NULL, description TEXT, scheduled_date TEXT NOT NULL,
+             scheduled_time TEXT, duration_mins INTEGER, status TEXT DEFAULT 'proposed',
+             created_by TEXT DEFAULT 'user', ext_source TEXT, ext_id TEXT,
+             created_at TEXT NOT NULL, FOREIGN KEY(goal_id) REFERENCES goals(id),
+             FOREIGN KEY(habit_id) REFERENCES habits(id), UNIQUE(ext_source, ext_id)
+           )"""
+    )
+
+    # 5. Chat History (The Steering Wheel)
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS messages (
+             id INTEGER PRIMARY KEY, role TEXT NOT NULL, -- 'user' or 'hew'
+             content TEXT NOT NULL, timestamp TEXT NOT NULL
            )"""
     )
     return conn
@@ -118,3 +100,16 @@ def update_goal_status(goal_id, status):
     # We update status rather than delete, so the engine can reflect on achieved goals later!
     with connect() as conn:
         conn.execute("UPDATE goals SET status = ? WHERE id = ?", (status, goal_id))
+
+def log_message(role, content):
+    now = datetime.now().astimezone().isoformat()
+    with connect() as conn:
+        conn.execute("INSERT INTO messages (role, content, timestamp) VALUES (?, ?, ?)", (role, content, now))
+
+def get_chat_history(limit=20):
+    with connect() as conn:
+        # Get the latest X messages, but order them chronologically for the chat UI
+        return conn.execute(
+            "SELECT * FROM (SELECT * FROM messages ORDER BY timestamp DESC LIMIT ?) ORDER BY timestamp ASC", 
+            (limit,)
+        ).fetchall()
