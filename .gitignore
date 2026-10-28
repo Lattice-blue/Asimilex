@@ -1,16 +1,22 @@
 # Personal data (never commit)
+mirror/*.db
+mirror/*.sqlite
 mirror/goals.json
 mirror/Mirror.md
+Mirror.md
 *.db
 *.sqlite
 
+# Keep user files/PDFs private, but track the folder via .gitkeep
+mirror/files/*
+!mirror/files/.gitkeep
+
+# Private / Scratch notes
+notes.md
+
 # Python / editor noise
 __pycache__/
+*.pyc
 .venv/
 .vscode/
 .obsidian/
-
-mirror/*.db
-mirror/Mirror.md
-
-notes.md

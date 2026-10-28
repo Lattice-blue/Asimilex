@@ -163,14 +163,10 @@ class Handler(BaseHTTPRequestHandler):
     def log_message(self, *args):
         pass  # keep the terminal quiet
 
-
-if __name__ == "__main__":
+def start_server():
     print(f"Asimilex running at http://localhost:{PORT}  (Ctrl+C to stop)")
     server = HTTPServer(("127.0.0.1", PORT), Handler)
-    
-    # Set a 0.5s timeout so Python periodically wakes up to catch KeyboardInterrupt (Ctrl+C)
     server.timeout = 0.5
-
     try:
         while True:
             server.handle_request()
@@ -178,3 +174,6 @@ if __name__ == "__main__":
         print("\nStopping Asimilex...")
     finally:
         server.server_close()
+
+if __name__ == "__main__":
+    start_server()
