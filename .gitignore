@@ -1,0 +1,14 @@
+# Personal data (never commit)
+mirror/goals.json
+mirror/Mirror.md
+*.db
+*.sqlite
+
+# Python / editor noise
+__pycache__/
+.venv/
+.vscode/
+.obsidian/
+
+mirror/*.db
+mirror/Mirror.md
