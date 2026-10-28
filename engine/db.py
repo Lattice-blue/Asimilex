@@ -33,6 +33,47 @@ def connect():
              created_at TEXT NOT NULL
            )"""
     )
+
+    # 3. HABITS (The Engines/Rules)
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS habits (
+             id INTEGER PRIMARY KEY,
+             goal_id INTEGER,                 -- Which goal this serves (nullable)
+             title TEXT NOT NULL,
+             frequency TEXT NOT NULL,         -- e.g., 'daily', 'mon,wed,fri', 'weekends'
+             time_of_day TEXT,                -- 'morning', '14:30', or NULL for anytime
+             duration_mins INTEGER,
+             status TEXT DEFAULT 'active',    -- 'proposed', 'active', 'paused'
+             created_by TEXT DEFAULT 'user',  -- 'user' or 'ai'
+             created_at TEXT NOT NULL,
+             FOREIGN KEY(goal_id) REFERENCES goals(id)
+           )"""
+    )
+
+    # 4. COMMITMENTS (The Stepping Stones)
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS commitments (
+             id INTEGER PRIMARY KEY,
+             goal_id INTEGER,
+             habit_id INTEGER,                -- If a habit spawned this, link it here
+             title TEXT NOT NULL,
+             description TEXT,                -- Maps to Calendar "Notes/Description"
+             scheduled_date TEXT NOT NULL,    -- YYYY-MM-DD
+             scheduled_time TEXT,             -- HH:MM (if strict), NULL (if floating/anytime)
+             duration_mins INTEGER,           -- Maps to Calendar event duration
+             status TEXT DEFAULT 'proposed',  -- 'proposed', 'active', 'completed', 'dropped'
+             created_by TEXT DEFAULT 'user',  -- 'user', 'ai'
+             
+             -- Future-proofing for Calendars:
+             ext_source TEXT,                 -- e.g., 'gcal', 'outlook' (NULL if created in Hew)
+             ext_id TEXT,                     -- The unique ID from Google/Outlook
+             
+             created_at TEXT NOT NULL,
+             FOREIGN KEY(goal_id) REFERENCES goals(id),
+             FOREIGN KEY(habit_id) REFERENCES habits(id),
+             UNIQUE(ext_source, ext_id)       -- Prevents calendar duplicate bugs!
+           )"""
+    )
     return conn
 
 
