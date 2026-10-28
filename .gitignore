@@ -12,3 +12,5 @@ __pycache__/
 
 mirror/*.db
 mirror/Mirror.md
+
+notes.md
