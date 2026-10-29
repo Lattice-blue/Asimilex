@@ -1,10 +1,15 @@
 """
-Tools (Hands) for Hew.
-These functions are directly invoked by Gemini to alter the Mirror.
+Tools Registry for Hew.
+Combines Database Hands with Sight Optics.
 """
 from datetime import datetime
 from engine import db
+from engine.sight import SIGHT_TOOLS
 
+
+# =============================================================================
+# DATABASE TOOLS (HANDS)
+# =============================================================================
 
 def create_goal(title: str, priority: int = 3, deadline: str = "", why: str = "") -> str:
     """Creates a new high-level objective or goal for the user."""
@@ -15,45 +20,38 @@ def create_goal(title: str, priority: int = 3, deadline: str = "", why: str = ""
         return f"[Error] Failed to create goal: {e}"
 
 
-def schedule_commitment(title: str, scheduled_date: str, scheduled_time: str = "", duration_mins: int = 60, notes: str = "") -> str:
+def schedule_commitment(title: str, scheduled_date: str, scheduled_time: str = "", duration_mins: int = 60, notes: str = "", goal_id: int = None) -> str:
     """Schedules an actionable task, study block, or event for a specific date/time."""
     try:
         now = datetime.now().astimezone().isoformat()
         with db.connect() as conn:
             conn.execute(
                 """INSERT INTO commitments 
-                   (title, description, scheduled_date, scheduled_time, duration_mins, status, created_by, created_at)
-                   VALUES (?, ?, ?, ?, ?, 'active', 'ai', ?)""",
-                (title, notes, scheduled_date, scheduled_time or None, duration_mins, now)
+                   (goal_id, title, description, scheduled_date, scheduled_time, duration_mins, status, created_by, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, 'active', 'ai', ?)""",
+                (goal_id or None, title, notes, scheduled_date, scheduled_time or None, duration_mins, now)
             )
         time_str = f" at {scheduled_time}" if scheduled_time else ""
-        return f"[Success] Scheduled commitment '{title}' for {scheduled_date}{time_str} ({duration_mins} mins)."
+        goal_str = f" [Linked to Goal #{goal_id}]" if goal_id else ""
+        return f"[Success] Scheduled commitment '{title}' for {scheduled_date}{time_str} ({duration_mins} mins){goal_str}."
     except Exception as e:
         return f"[Error] Failed to schedule commitment: {e}"
 
 
 def complete_commitment(task_name_or_id: str) -> str:
-    """
-    Marks an active commitment or task as completed when the user finishes it.
-    
-    Args:
-        task_name_or_id: The ID of the task or keywords from the title (e.g. 'Calculus' or '3').
-    """
+    """Marks an active commitment or task as completed when finished."""
     try:
         now = datetime.now().astimezone().isoformat()
         with db.connect() as conn:
-            # Check by ID first
             if str(task_name_or_id).isdigit():
                 cur = conn.execute("UPDATE commitments SET status = 'completed' WHERE id = ?", (int(task_name_or_id),))
             else:
-                # Search by title match
                 cur = conn.execute(
                     "UPDATE commitments SET status = 'completed' WHERE title LIKE ? AND status = 'active'", 
                     (f"%{task_name_or_id}%",)
                 )
             
             if cur.rowcount > 0:
-                # Log completion to events history (Derived Adherence!)
                 conn.execute(
                     "INSERT INTO events (ts, kind, source, recorded_at) VALUES (?, ?, 'ai', ?)",
                     (now, f"completed_task: {task_name_or_id}", now)
@@ -65,14 +63,7 @@ def complete_commitment(task_name_or_id: str) -> str:
 
 
 def reschedule_commitment(task_name_or_id: str, new_date: str, new_time: str = "") -> str:
-    """
-    Moves an existing commitment to a new date or time when life gets delayed.
-    
-    Args:
-        task_name_or_id: Task ID or keyword from the title.
-        new_date: New date in YYYY-MM-DD format.
-        new_time: Optional new 24-hr time in HH:MM format.
-    """
+    """Moves an existing commitment to a new date or time."""
     try:
         with db.connect() as conn:
             if str(task_name_or_id).isdigit():
@@ -106,11 +97,27 @@ def log_sleep(went_to_bed: str, woke_up: str, note: str = "") -> str:
         return f"[Error] Failed to log sleep: {e}"
 
 
-# All tools given to Gemini
+def create_habit(title: str, frequency: str = "daily", time_of_day: str = "", duration_mins: int = 5, goal_id: int = None) -> str:
+    """Creates a recurring habit rule."""
+    try:
+        now = datetime.now().astimezone().isoformat()
+        with db.connect() as conn:
+            conn.execute(
+                """INSERT INTO habits (goal_id, title, frequency, time_of_day, duration_mins, status, created_by, created_at)
+                   VALUES (?, ?, ?, ?, ?, 'active', 'ai', ?)""",
+                (goal_id or None, title, frequency, time_of_day or None, duration_mins, now)
+            )
+        return f"[Success] Created {frequency} habit: '{title}'."
+    except Exception as e:
+        return f"[Error] Failed to create habit: {e}"
+
+# Combined tool registry (Hands + Sight)
 HEW_TOOLS = [
     create_goal,
     schedule_commitment,
     complete_commitment,
     reschedule_commitment,
     log_sleep,
+    create_habit,
+    *SIGHT_TOOLS,  # Injects get_file_tree and read_text
 ]

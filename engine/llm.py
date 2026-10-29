@@ -43,15 +43,23 @@ def build_context_snapshot() -> str:
     goals = db.get_active_goals()
     goals_text = "\n".join([f"- [ID:{g['id']} | P{g['priority']}] {g['title']}" for g in goals]) or "No active goals set."
 
-    # Today's commitments
+   # Today's commitments (with linked Goals)
     today = datetime.now().strftime("%Y-%m-%d")
     with db.connect() as conn:
         commitments = conn.execute(
-            "SELECT * FROM commitments WHERE scheduled_date = ? AND status != 'dropped'", (today,)
+            """SELECT c.*, g.title as goal_title 
+               FROM commitments c 
+               LEFT JOIN goals g ON c.goal_id = g.id 
+               WHERE c.scheduled_date = ? AND c.status != 'dropped'""", 
+            (today,)
         ).fetchall()
     
-    commitments_text = "\n".join([f"- {c['title']} ({c['scheduled_time'] or 'anytime'})" for c in commitments]) or "None scheduled."
-
+    commitments_text = "\n".join([
+        f"- [ID:{c['id']}] {c['title']} ({c['scheduled_time'] or 'anytime'})" + 
+        (f" -> Serves Goal: '{c['goal_title']}'" if c['goal_title'] else " (Standalone task)")
+        for c in commitments
+    ]) or "None scheduled."
+    
     # Recent Events
     events = db.recent_events(5)
     events_text = "\n".join([f"- {e['kind']} at {e['ts']}" for e in events]) or "No recent events recorded."
